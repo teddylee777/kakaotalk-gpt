@@ -20,7 +20,7 @@ from utils import print_messages, StreamHandler
 st.set_page_config(page_title="카톡GPT", page_icon="💬")
 st.title("카톡GPT💬")
 st.markdown(
-    """by [테디노트](https://www.youtube.com/c/teddynote). 소스코드 활용시 반드시 **출처**를 밝혀주세요🙏"""
+    """by [테디노트](https://www.youtube.com/c/teddynote). [소스코드](https://github.com/teddylee777/kakaotalk-gpt) 활용시 반드시 **출처**를 밝혀주세요🙏"""
 )
 
 if "messages" not in st.session_state:
