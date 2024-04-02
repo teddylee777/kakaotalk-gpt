@@ -13,7 +13,25 @@
 
 ## 데모 사이트
 
+무료 호스팅이라 메모리가 작어 터지더라고요... 데모앱에서 동작 안하면 로컬에서 돌려 보세요!
+
 - [데모링크](https://kakao-gpt-1cdbd5dc9bb3.herokuapp.com/)
+
+## 실행 방법
+
+git clone 후
+
+설치
+
+```bash
+pip install -r requirements.txt
+```
+
+실행 
+
+```bash
+streamlit run main.py
+```
 
 ## License
 
