@@ -90,9 +90,19 @@ class SelfQueryRetrieverFactory(RetrieverFactory):
             "metadata_field_info",
             [
                 AttributeInfo(
-                    name="date",
-                    description="The date the message was sent",
-                    type="string",
+                    name="year",
+                    description="The year of the chat message was sent",
+                    type="integer",
+                ),
+                AttributeInfo(
+                    name="month",
+                    description="The month of the chat message was sent",
+                    type="integer",
+                ),
+                AttributeInfo(
+                    name="day",
+                    description="The day of the chat message was sent",
+                    type="integer",
                 ),
                 AttributeInfo(
                     name="user",
@@ -102,7 +112,7 @@ class SelfQueryRetrieverFactory(RetrieverFactory):
                 AttributeInfo(
                     name="row",
                     description="The row number in the original CSV file",
-                    type="int",
+                    type="integer",
                 ),
                 AttributeInfo(
                     name="source", description="File path of the source", type="string"

@@ -29,13 +29,18 @@ class KaKaoTalkLoader(CSVLoader):
 
     def __read_file(self, csvfile) -> Iterator[Document]:
         df = pd.read_csv(csvfile)
+        df["Date"] = pd.to_datetime(df["Date"])
+        df["Date_strf"] = df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S").astype(str)
         for i, row in df.iterrows():
             date = row["Date"]
             user = self.anonymize_user_id(row["User"])
             content = f'"User: {user}, Message: {row["Message"]}'
 
             metadata = {
-                "date": date,
+                "date": row["Date_strf"],
+                "year": date.year,
+                "month": date.month,
+                "day": date.day,
                 "user": user,
                 "row": i,
                 "source": str(self.file_path),
