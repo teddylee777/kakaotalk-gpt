@@ -3,7 +3,7 @@ from langchain.storage import LocalFileStore
 from langchain.embeddings import CacheBackedEmbeddings
 
 
-def embedding_factory(api_key: str, use_cache=True):
+def embedding_factory(api_key: str, use_cache=False):
     # OpenAI 임베딩을 사용하여 기본 임베딩 설정
     embedding = OpenAIEmbeddings(api_key=api_key)
 
