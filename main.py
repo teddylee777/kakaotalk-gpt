@@ -34,9 +34,12 @@ with st.sidebar:
     if openai_api_key:
         st.session_state["OPENAI_API_KEY"] = openai_api_key
     st.markdown(
-        "📌 CSV파일 다운로드 방법\n\n`채팅방`-`우측상단 햄버거메뉴`-`채팅방 설정`-`대화 내용 관리`-`대화 내용 저장`"
+        "📌 TXT파일 다운로드 방법(📱모바일 Only)\n\n`채팅방`-`우측상단 햄버거메뉴`-`채팅방 설정`-`대화 내용 내보내기`-`텍스트 메시지만 보내기`-`이메일로전송된 첨부파일 다운로드`"
     )
-    kakaotalk_file = st.file_uploader("📄 카톡 CSV 파일 업로드", type=["csv"])
+    st.markdown(
+        "📌 CSV파일 다운로드 방법(💻Mac Only)\n\n`채팅방`-`우측상단 햄버거메뉴`-`채팅방 설정`-`대화 내용 관리`-`대화 내용 저장`"
+    )
+    kakaotalk_file = st.file_uploader("📄 카톡 CSV 파일 업로드", type=["csv", "txt"])
     if kakaotalk_file:
         if "OPENAI_API_KEY" not in st.session_state:
             st.info("OpenAI API Key를 입력해 주세요.")
@@ -49,8 +52,12 @@ if "kakaotalk_file" in st.session_state and "retriever" not in st.session_state:
             with tempfile.NamedTemporaryFile() as f:
                 f.write(st.session_state["kakaotalk_file"].read())
                 f.flush()
+                filename = f.name
+                if st.session_state["kakaotalk_file"].name.endswith(".txt"):
+                    # 텍스트 파일을 CSV 파일로 변환
+                    filename = kakao.KakaoTalkText2CSVConverter(filename).convert()
                 # 카카오톡 로더
-                loader = kakao.KaKaoTalkLoader(f.name, encoding="utf8")
+                loader = kakao.KaKaoTalkCSVLoader(filename, encoding="utf8")
 
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=500, chunk_overlap=0
