@@ -1,0 +1,18 @@
+{
+    // VSCode의 Python 확장 기능이 코드 분석을 할 때 추가적으로 참고할 경로를 지정합니다.
+    // "./"를 추가하여 이 디렉토리 내의 모듈을 쉽게 임포트할 수 있게 합니다.
+    "python.analysis.extraPaths": [
+        "."
+    ],
+
+    // 자동완성 기능이 작동할 때 참고할 추가적인 경로를 지정합니다.
+    // 이 설정 역시 "./" 디렉토리 내의 모듈에 대한 자동완성을 가능하게 합니다.
+    "python.autoComplete.extraPaths": [
+        "."
+    ],
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}

@@ -1,17 +1,18 @@
+import re
 from typing import Iterator
 from langchain_core.documents import Document
 from langchain_community.document_loaders.helpers import detect_file_encodings
 import pandas as pd
 from langchain_community.document_loaders import CSVLoader
-import re
-import csv
 from datetime import datetime
 
 
-class KaKaoTalkCSVLoader(CSVLoader):
-    def __init__(self, file_path: str, encoding: str = "utf8", **kwargs):
+class KaKaoTalkLoader(CSVLoader):
+    def __init__(self, file_path: str, file_suffix:str, encoding: str = "utf8", **kwargs):
         super().__init__(file_path, encoding=encoding, **kwargs)
-
+        # NOTE - choh(2024.04.05) - 파일 확장자 변수 추가
+        self.file_suffix = file_suffix
+    
     def anonymize_user_id(self, user_id, num_chars_to_anonymize=3):
         """
         비식별화 함수는 주어진 사용자 ID의 앞부분을 '*'로 대체하여 비식별화합니다.
@@ -29,41 +30,139 @@ class KaKaoTalkCSVLoader(CSVLoader):
         anonymized_id = "*" * num_chars_to_anonymize + user_id[num_chars_to_anonymize:]
 
         return anonymized_id
+    
+    # NOTE - choh(2024.04.05) - 12시간제를 24시간제로 변환
+    def process_time_to_24hr_format(self, date_obj, time_str):
+        """
+        대화 내용중에 시간 표시가 '오전 12:23', '오후 11:23'과 같이 12시간제로 되어 있는 경우, 
+        이를 24시간제로 변환합니다.
+        
+        :param date_obj: 대화 내용의 날짜 정보가 담긴 datetime 객체
+        :praam time_str: 대화 내용의 시간 정보가 담긴 문자열
+        :return: 24시간제로 변환된 datetime 객체
+        """
+        
+        # '오전/오후' 부분과 시간 부분을 분리합니다.
+        period, time_part = time_str.split(' ', 1)
+        
+        # 시간 부분을 시와 분으로 다시 분리합니다.
+        hour, minute = map(int, time_part.split(':'))
+        
+        # '오후'인 경우 12를 더하되, '오후 12시'는 제외합니다.
+        if period == '오후' and hour != 12:
+            hour += 12
+        # '오전 12시'는 0시로 처리합니다.
+        elif period == '오전' and hour == 12:
+            hour = 0
+        
+        # date_obj과 결합하여 최종 datetime 객체를 생성합니다.
+        # 여기서 datetime 함수는 위에서 임포트한 datetime 클래스를 사용합니다.
+        combined_datetime = datetime(date_obj.year, date_obj.month, date_obj.day, hour, minute)
+        
+        # pandas의 to_datetime 함수를 사용하여 pandas.Timestamp 객체로 변환합니다.
+        return pd.to_datetime(combined_datetime)
+    
+    # NOTE - choh(2024.04.05) - 대화목록의 날짜 변환 부분을 파싱
+    def process_date(self, line: str) -> tuple:
+        """
+        -------- 2024년 4월 5일 화요일 -------- 형태의 날짜를 파싱하고,
+        파싱 성공 여부와 함께 파싱된 날짜 또는 원래 문자열을 반환합니다.
+        
+        :param line: 날짜 문자열
+        :return: (파싱 성공 여부, 파싱된 날짜 또는 원래 문자열)
+        """
+        # -------- 2024년 4월 5일 화요일 -------- 날짜가 이상태임
+        date_match = re.match(r'[-]+ (\d+년 \d+월 \d+일) [^\d]+', line)
+        if date_match:
+            # 2024년 4월 5일, 형태의 날짜 추출
+            date_pattern = re.compile(r'(\d+)년 (\d+)월 (\d+)일')
+            match = date_pattern.search(date_match.group(1))
+            if match:
+                year, month, day = map(int, match.groups())
+                return (True, pd.to_datetime(f"{year}-{month}-{day}"))
+        return (False, line)
 
-    @staticmethod
-    def is_relevant_message(message: str) -> bool:
-        """메시지가 입장 또는 퇴장 관련 메시지인지 확인합니다."""
-        if "님이 들어왔습니다." in message or "님이 나갔습니다." in message:
-            return False  # 입장 또는 퇴장 메시지인 경우
-        return True  # 그렇지 않은 경우
-
+    # NOTE - choh(2024.04.05) - __read_file을 테스트 하기 위한 wrapper 함수
+    def _read_file_test(self, csvfile) -> Iterator[Document]:
+        """테스트를 위한 래퍼 함수"""
+        return self.__read_file(csvfile)
+    
     def __read_file(self, csvfile) -> Iterator[Document]:
-        df = pd.read_csv(csvfile)
-        df["Date"] = pd.to_datetime(df["Date"])
-        df["Date_strf"] = df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S").astype(str)
-        for i, row in df.iterrows():
-            is_relevant = KaKaoTalkCSVLoader.is_relevant_message(row["Message"])
-            if not is_relevant:
-                continue
-            date = row["Date"]
-            user = self.anonymize_user_id(row["User"])
-            content = f'"User: {user}, Message: {row["Message"]}'
+        # NOTE - choh(2024.04.05) - TXT 형태의 대화 메세지 사전 처리
+        if self.file_suffix == ".txt":
+            
+            # 전날 날짜 변수 초기화
+            temp_date = None
+            i = 0 # 행 번호
+            for line in csvfile:
+                
+                # 이번 줄이 날짜가 맞으면 is_parsed=True, result는 날짜
+                is_parsed, result = self.process_date(line)
+                
+                # 파싱한 문자열이 날짜 패턴에 맞으면, 날짜를 저장
+                if is_parsed:
+                    temp_date = result
+                
+                # 날짜가 아니면, 체팅이기 때문에, 체팅을 패턴 매칭
+                else:
+                    # 초기값 설정
+                    user = None
+                    time_12hr = None
+                    message = None
 
-            metadata = {
-                "date": row["Date_strf"],
-                "year": date.year,
-                "month": date.month,
-                "day": date.day,
-                "user": user,
-                "row": i,
-                "source": str(self.file_path),
-            }
-            yield Document(page_content=content, metadata=metadata)
+                    # 대화 패턴 찾기
+                    conversation_match = re.match(r'\[([^\]]+)\] \[([^\]]+)\] (.+)', line)
+                    if conversation_match:
+                        user_real = conversation_match.group(1)
+                        time_12hr = conversation_match.group(2)
+                        message = conversation_match.group(3).strip()
+                        
+                        # 시간을 24시간제로 변환                        
+                        date = self.process_time_to_24hr_format(temp_date, time_12hr)
+                        # 사용자 ID 비식별화
+                        user = self.anonymize_user_id(user_real)
+                        
+                        content = f'"User: {user}, Message: {message}'
+                        
+                        metadata = {
+                            "date":  date.strftime("%Y-%m-%d %H:%M:%S"),
+                            "year": date.year,
+                            "month": date.month,
+                            "day": date.day,
+                            "user": user,
+                            "row": i,
+                            "source": str(self.file_path),
+                        }
+                        i += 1 # 행 번호 증가
+                        yield Document(page_content=content, metadata=metadata)
+       
+        
+        # NOTE - choh(2024.04.05) - 기존 코드, csv 파일인 경우
+        else:
+            df = pd.read_csv(csvfile)
+            df["Date"] = pd.to_datetime(df["Date"])
+            df["Date_strf"] = df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S").astype(str)
+            for i, row in df.iterrows():
+                date = row["Date"]
+                user = self.anonymize_user_id(row["User"])
+                content = f'"User: {user}, Message: {row["Message"]}'
+
+                metadata = {
+                    "date": row["Date_strf"],
+                    "year": date.year,
+                    "month": date.month,
+                    "day": date.day,
+                    "user": user,
+                    "row": i,
+                    "source": str(self.file_path),
+                }
+                yield Document(page_content=content, metadata=metadata)
 
     def lazy_load(self) -> Iterator[Document]:
         try:
             with open(self.file_path, newline="", encoding=self.encoding) as csvfile:
                 yield from self.__read_file(csvfile)
+      
         except UnicodeDecodeError as e:
             if self.autodetect_encoding:
                 detected_encodings = detect_file_encodings(self.file_path)
@@ -80,102 +179,3 @@ class KaKaoTalkCSVLoader(CSVLoader):
                 raise RuntimeError(f"Error loading {self.file_path}") from e
         except Exception as e:
             raise RuntimeError(f"Error loading {self.file_path}") from e
-
-
-class KakaoTalkText2CSVConverter:
-    def __init__(self, filepath: str):
-        self.filepath = filepath
-
-    @staticmethod
-    def convert_datetime(date_str, time_str):
-        """날짜와 시간 문자열을 파싱하여 'YYYY-MM-DD HH:MM:SS' 형식의 문자열로 변환합니다."""
-        date_formatted = datetime.strptime(date_str.strip(","), "%Y. %m. %d").date()
-        if "오후" in time_str:
-            hour, minute = map(int, time_str.replace("오후 ", "").split(":"))
-            hour = hour + 12 if hour < 12 else hour
-        else:
-            hour, minute = map(int, time_str.replace("오전 ", "").split(":"))
-        new_time = f"{hour:02d}:{minute:02d}:00"
-        return f"{date_formatted} {new_time}"
-
-    def process_final_chat_to_csv(self, chat_lines):
-        """채팅 로그를 분석하여 CSV 형식으로 변환된 데이터를 리스트로 반환합니다."""
-        new_message_pattern = re.compile(
-            r"(\d{4}\.\s\d{1,2}\.\s\d{1,2})\.\s(오전|오후)\s(\d{1,2}:\d{2}),\s([^:]+)\s:"
-        )
-        system_message_pattern = re.compile(
-            r"\d{4}년\s\d{1,2}월\s\d{1,2}일\s[월화수목금토일]요일|님이 (들어왔습니다|나갔습니다)\."
-        )
-
-        processed_chat_data = []
-        current_date, current_time, current_user, current_message = None, None, None, ""
-
-        for line in chat_lines:
-            if system_message_pattern.search(line):
-                continue
-
-            new_message_match = new_message_pattern.match(line)
-            if new_message_match:
-                if current_user:
-                    current_datetime = self.convert_datetime(
-                        current_date, f"{new_message_match.group(2)} {current_time}"
-                    )
-                    processed_chat_data.append(
-                        [
-                            current_datetime,
-                            current_user,
-                            current_message.strip().replace("\n", " "),
-                        ]
-                    )
-                current_date, current_time, current_user = (
-                    new_message_match.groups()[0],
-                    new_message_match.groups()[2],
-                    new_message_match.groups()[3],
-                )
-                current_message = line[new_message_match.end() :].strip()
-            elif line.strip():
-                current_message += " " + line.strip()
-
-        if current_user:
-            current_datetime = self.convert_datetime(
-                current_date, f"{new_message_match.group(2)} {current_time}"
-            )
-            processed_chat_data.append(
-                [
-                    current_datetime,
-                    current_user,
-                    current_message.strip().replace("\n", " "),
-                ]
-            )
-
-        return processed_chat_data
-
-    def read_chat_file(self, encoding="utf-8"):
-        """파일 경로에서 채팅 파일을 읽어오고, 각 줄을 리스트로 반환합니다."""
-        try:
-            with open(self.filepath, "r", encoding=encoding) as file:
-                chat_lines = file.readlines()
-            return chat_lines
-        except FileNotFoundError:
-            print(f"Error: The file {self.filepath} was not found.")
-            return []
-
-    def convert(self, encoding="utf-8"):
-        """채팅 파일을 읽어서 CSV 파일로 변환하는 주 함수입니다."""
-        chat_lines = self.read_chat_file(encoding=encoding)
-        if not chat_lines:
-            return "Conversion failed due to file read error."
-
-        chat_data_final = self.process_final_chat_to_csv(chat_lines)
-        output_path = self.filepath.replace(".txt", ".csv")
-
-        try:
-            with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
-                csvwriter = csv.writer(csvfile)
-                csvwriter.writerow(["Date", "User", "Message"])
-                csvwriter.writerows(chat_data_final)
-        except IOError as e:
-            print(f"Error writing to CSV: {e}")
-            return "Conversion failed due to file write error."
-
-        return output_path
