@@ -1,4 +1,14 @@
-## 카카오톡 GPT
+# 카카오톡 GPT
+
+## 구조도
+
+**전처리**
+![preprocessing](./images/preprocessing.png)
+
+**RAG**
+![rag](./images/RAG.png)
+
+## 사용방법
 
 카카오톡 대화를 업로드 하여 업로드한 카톡 파일 기반으로 대화하는 GPT 입니다.
 
