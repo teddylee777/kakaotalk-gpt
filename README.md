@@ -8,7 +8,7 @@
 
 **RAG**
 
-![rag](./images/RAG.png)
+![rag](./images/rag-process.png)
 
 ## 사용방법
 
