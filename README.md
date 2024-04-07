@@ -3,9 +3,11 @@
 ## 구조도
 
 **전처리**
+
 ![preprocessing](./images/preprocessing.png)
 
 **RAG**
+
 ![rag](./images/RAG.png)
 
 ## 사용방법
