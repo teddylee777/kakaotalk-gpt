@@ -2,3 +2,8 @@ cache/
 __pycache__/
 
 *.ipynb
+
+# choh
+venv/
+.vscode
+.pytest_cache/
